@@ -1,0 +1,14 @@
+[project]
+name = "piip-presidio"
+version = "0.1.0"
+description = "Local Presidio Analyzer server (English + Japanese) for the piip CLI"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "presidio-analyzer>=2.2.358",
+    "spacy[ja]>=3.8,<3.9",
+    "en_core_web_md @ https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl",
+    "ja_core_news_md @ https://github.com/explosion/spacy-models/releases/download/ja_core_news_md-3.8.0/ja_core_news_md-3.8.0-py3-none-any.whl",
+]
+
+[tool.uv]
+package = false
