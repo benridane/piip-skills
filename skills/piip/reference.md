@@ -62,6 +62,17 @@ exclude = ["package.json", "**/node_modules/**"]
 all_files = false             # true: ソースコードも含め全ファイル
 grep = true                   # Grep の一致行もマスク
 bash = true                   # 対象ファイル名を含む Bash コマンドの出力もマスク
+write_guard = true            # マスク済みの値の書き戻しを拒否
+
+[hook.outbound]               # 送信系コマンド・MCP・WebFetch の入力
+action = "ask"                # ask | deny | off
+ignore_types = ["ip", "hosting"]
+commands = ["curl", "wget", "gh", "ssh", "scp", "aws", "..."]   # 省略時は既定の一覧
+
+[hook.prompt]                 # プロンプト
+action = "block"              # block | warn | off
+ignore_types = ["ip", "hosting"]
+allow_marker = "#piip-ok"     # これを含むプロンプトはそのまま送る
 ```
 
 環境変数: `PIIP_ENGINE`、`PIIP_PRESIDIO_URL`。

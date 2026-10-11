@@ -114,7 +114,8 @@ enum Command {
     Types,
     /// Check the Presidio backend.
     Presidio,
-    /// Claude Code PostToolUse hook: mask Read/Grep/Bash output (JSON on stdin).
+    /// Claude Code hook (JSON on stdin): masks Read/Grep/Bash output
+    /// (PostToolUse), checks tool input (PreToolUse) and prompts (UserPromptSubmit).
     Hook {
         /// Print whether these paths are masked by the hook, and exit.
         #[arg(long, value_name = "PATH", num_args = 1..)]
@@ -270,8 +271,20 @@ fn cmd_hook(settings: &Settings, check: Vec<String>) -> Result<ExitCode> {
         return Ok(ExitCode::SUCCESS);
     }
     let event: Value = serde_json::from_str(&read_stdin()?).context("parsing hook input")?;
-    let outcome = hook.handle(&event);
-    if let Some(output) = piip::hook::hook_output(&outcome) {
+    let state = piip::guard::SessionState::new();
+    let guard = piip::guard::Guard::new(settings);
+    let output = match event["hook_event_name"].as_str().unwrap_or("PostToolUse") {
+        "PreToolUse" => guard.pre_tool_use(&event, &state),
+        "UserPromptSubmit" => guard.user_prompt(&event),
+        _ => {
+            let outcome = hook.handle(&event);
+            if let Some(session) = event["session_id"].as_str() {
+                state.record(session, &outcome.tokens);
+            }
+            piip::hook::hook_output(&outcome)
+        }
+    };
+    if let Some(output) = output {
         println!("{}", serde_json::to_string(&output)?);
     }
     Ok(ExitCode::SUCCESS)

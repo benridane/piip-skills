@@ -59,8 +59,15 @@ Claude Code では「このログの個人情報をマスクして」「リポ�
 
 ## フック
 
-PostToolUse フック（`piip hook`）が、Claude の Read・Grep・Bash の出力をモデルに渡る前にマスクする。
-頼まなくても、データファイルの生の値はコンテキストに入らない。
+`piip hook` が Claude Code の3つの場面で働く。
+
+| 場面 | フック | 動作 |
+|---|---|---|
+| 読む | PostToolUse | Read・Grep・Bash の出力をモデルに渡る前にマスクする |
+| 書く・送る | PreToolUse | マスク済みの値の書き戻しを拒否。送信系コマンド・MCP・WebFetch に個人情報があれば確認を求める |
+| 頼む | UserPromptSubmit | 個人情報を含むプロンプトを止め、マスクした版を示す（`#piip-ok` を付ければそのまま送る） |
+
+### 読む
 
 | ツール | マスクする条件 |
 |---|---|
@@ -72,6 +79,19 @@ PostToolUse フック（`piip hook`）が、Claude の Read・Grep・Bash の出
 - ソースコードは既定で対象外（マスクした値を Write で書き戻す事故を防ぐため）。`[hook] all_files = true` で全ファイルを対象にできる
 - マスクに失敗したときは出力を渡さない（フェイルクローズ）
 - 対象の確認: `piip hook --check logs/app.log src/main.rs`
+
+### 書く・送る
+
+- **書き戻しの防止**: モデルに見せたマスク済みの値（`t***@example.jp`、`[REDACTED]` など）をセッションごとに記録し
+  （`~/.cache/piip/sessions/`、マスク後の形だけ。7 日で削除）、Edit・Write・Bash がそれを新しく書き込もうとしたら拒否する。
+  5 文字未満の値（`山*` など）は対象外
+- **外部への送信**: `curl` `gh` `ssh` `aws` などの送信系コマンド、MCP ツール、WebFetch/WebSearch の入力に個人情報があれば、
+  実行前に確認を求める（`[hook.outbound] action = "deny"` で拒否）。IP アドレスは既定で数えない
+
+### 頼む
+
+プロンプトに個人情報があると送信を止め、マスクした版を表示する。それをコピーして送り直すか、`#piip-ok` を付けてそのまま送る。
+`[hook.prompt] action = "warn"` なら止めずに警告だけ、`"off"` で無効。
 
 ### Presidio（任意）
 

@@ -154,6 +154,62 @@ pub struct HookConfig {
     pub grep: bool,
     /// Mask Bash output when the command names an included file.
     pub bash: bool,
+    /// Refuse Edit/Write/Bash input that writes back a value this session
+    /// only ever saw masked (t***@example.jp would overwrite the real one).
+    pub write_guard: bool,
+    pub outbound: OutboundConfig,
+    pub prompt: PromptConfig,
+}
+
+/// Personal data in tool input that leaves the machine: network commands in
+/// Bash, MCP tools, WebFetch/WebSearch.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct OutboundConfig {
+    /// ask (confirm with the user), deny, or off.
+    pub action: String,
+    /// Types that do not count (IPs are everywhere in curl and ssh).
+    pub ignore_types: Vec<String>,
+    /// Bash commands that send data elsewhere.
+    pub commands: Vec<String>,
+}
+
+impl Default for OutboundConfig {
+    fn default() -> Self {
+        OutboundConfig {
+            action: "ask".into(),
+            ignore_types: vec!["ip".into(), "hosting".into()],
+            commands: [
+                "curl", "wget", "http", "https", "xh", "gh", "glab", "ssh", "scp", "sftp", "rsync",
+                "ftp", "nc", "ncat", "telnet", "mail", "mailx", "sendmail", "aws", "gcloud",
+                "gsutil", "az", "rclone", "s3cmd", "wrangler", "vercel", "netlify", "heroku",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+        }
+    }
+}
+
+/// Personal data typed or pasted into a prompt.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct PromptConfig {
+    /// block (the prompt is not sent; a masked copy is shown), warn, or off.
+    pub action: String,
+    pub ignore_types: Vec<String>,
+    /// A prompt containing this text is sent as is.
+    pub allow_marker: String,
+}
+
+impl Default for PromptConfig {
+    fn default() -> Self {
+        PromptConfig {
+            action: "block".into(),
+            ignore_types: vec!["ip".into(), "hosting".into()],
+            allow_marker: "#piip-ok".into(),
+        }
+    }
 }
 
 /// Data files that typically hold personal data. Source code is left out by
@@ -184,6 +240,9 @@ impl Default for HookConfig {
             all_files: false,
             grep: true,
             bash: true,
+            write_guard: true,
+            outbound: OutboundConfig::default(),
+            prompt: PromptConfig::default(),
         }
     }
 }

@@ -4,11 +4,22 @@
       {
         "matcher": "Read|Grep|Bash",
         "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/piip\" hook",
-            "timeout": 120
-          }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/piip\" hook", "timeout": 120 }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(Edit|MultiEdit|Write|NotebookEdit|Bash|WebFetch|WebSearch|mcp__.*)$",
+        "hooks": [
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/piip\" hook", "timeout": 120 }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/piip\" hook", "timeout": 60 }
         ]
       }
     ]

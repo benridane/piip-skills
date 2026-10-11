@@ -66,17 +66,26 @@ import json, os, sys
 path, binary = sys.argv[1], sys.argv[2]
 settings = json.load(open(path)) if os.path.exists(path) else {}
 command = f'"{binary}" hook'
-groups = settings.setdefault("hooks", {}).setdefault("PostToolUse", [])
-for group in groups:
-    group["hooks"] = [h for h in group.get("hooks", []) if not h.get("command", "").endswith('/piip" hook')]
-groups[:] = [g for g in groups if g["hooks"]]
-groups.append({"matcher": "Read|Grep|Bash", "hooks": [{"type": "command", "command": command, "timeout": 120}]})
+events = {
+    "PostToolUse": "Read|Grep|Bash",
+    "PreToolUse": "^(Edit|MultiEdit|Write|NotebookEdit|Bash|WebFetch|WebSearch|mcp__.*)$",
+    "UserPromptSubmit": None,
+}
+for event, matcher in events.items():
+    groups = settings.setdefault("hooks", {}).setdefault(event, [])
+    for group in groups:
+        group["hooks"] = [h for h in group.get("hooks", []) if not h.get("command", "").endswith('/piip" hook')]
+    groups[:] = [g for g in groups if g["hooks"]]
+    group = {"hooks": [{"type": "command", "command": command, "timeout": 120}]}
+    if matcher:
+        group["matcher"] = matcher
+    groups.append(group)
 os.makedirs(os.path.dirname(path), exist_ok=True)
 with open(path, "w") as f:
     json.dump(settings, f, indent=2, ensure_ascii=False)
     f.write("\n")
 PY
-	echo "Hook registered in $SETTINGS (PostToolUse: Read|Grep|Bash)"
+	echo "Hooks registered in $SETTINGS (PostToolUse, PreToolUse, UserPromptSubmit)"
 fi
 
 echo "Optional deeper backend: bash $DEST/scripts/presidio-start.sh  (then: piip -e hybrid ...)"

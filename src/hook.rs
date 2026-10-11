@@ -1,5 +1,6 @@
 //! Claude Code PostToolUse hook: mask what Read, Grep and Bash return
-//! before the model sees it.
+//! before the model sees it. (PreToolUse and UserPromptSubmit checks live
+//! in `crate::guard`.)
 //!
 //! The hook gets the tool result on stdin and answers with
 //! `hookSpecificOutput.updatedToolOutput`, so files on disk are never
@@ -30,6 +31,9 @@ pub struct Outcome {
     pub response: Option<Value>,
     pub types: BTreeSet<String>,
     pub notes: Vec<String>,
+    /// Masked values the model was shown (t***@example.jp), for the
+    /// write-back guard.
+    pub tokens: BTreeSet<String>,
 }
 
 impl<'a> Hook<'a> {
@@ -161,6 +165,7 @@ impl<'a> Hook<'a> {
         match result {
             Ok(report) => {
                 out.types.extend(report.detected_types);
+                out.tokens.extend(masked_tokens(text, &report.masked));
                 report.masked
             }
             Err(e) => {
@@ -195,6 +200,19 @@ pub fn hook_output(outcome: &Outcome) -> Option<Value> {
             "additionalContext": context,
         }
     }))
+}
+
+/// Words of the masked text that carry a mask and were not in the original
+/// (t***@example.jp, ***-***-5678, 東京都***, [REDACTED]). Words shorter
+/// than five characters (山*, ***) are too common to guard on.
+pub fn masked_tokens(original: &str, masked: &str) -> BTreeSet<String> {
+    masked
+        .split(|c: char| c.is_whitespace() || "\"'`=:,;()<>{}|".contains(c))
+        .filter(|w| w.chars().count() >= 5)
+        .filter(|w| w.contains("[REDACTED]") || (w.contains('*') && w.chars().any(|c| c != '*')))
+        .filter(|w| !original.contains(*w))
+        .map(str::to_string)
+        .collect()
 }
 
 /// Whether a shell command names a file the hook covers (cat app.log,
@@ -260,6 +278,7 @@ mod tests {
         assert_eq!(r["file"]["content"], "email t***@example.jp\nok\n");
         assert_eq!(r["file"]["numLines"], 3);
         assert!(out.types.contains("email"));
+        assert!(out.tokens.contains("t***@example.jp"));
     }
 
     #[test]
