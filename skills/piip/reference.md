@@ -53,6 +53,15 @@ threshold = 0.5
 entities = []                 # 空 = すべて（exclude_entities を除く）
 exclude_entities = ["DATE_TIME", "NRP", "URL", "ORGANIZATION", "IN_PAN"]
 timeout_secs = 60
+
+[hook]                        # Claude Code フック（piip hook）
+enabled = true
+engine = "builtin"            # hybrid なら人名も（Presidio に接続できなければ builtin）
+include = ["*.log", "*.csv", "*.json", ".env", "data/**"]   # 省略時は既定の一覧
+exclude = ["package.json", "**/node_modules/**"]
+all_files = false             # true: ソースコードも含め全ファイル
+grep = true                   # Grep の一致行もマスク
+bash = true                   # 対象ファイル名を含む Bash コマンドの出力もマスク
 ```
 
 環境変数: `PIIP_ENGINE`、`PIIP_PRESIDIO_URL`。

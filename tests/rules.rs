@@ -193,3 +193,16 @@ fn scan_reports_positions_without_duplicates() {
     assert_eq!(found[0].start, 3);
     assert_eq!(found[1].masked, "a***@example.com");
 }
+
+#[test]
+fn numbers_do_not_span_lines() {
+    // 1234 5678 2026 10 happens to pass the Luhn check.
+    assert_eq!(
+        mask("tel 090-1234-5678\n2026-10-01 order ok"),
+        "tel ***-***-5678\n2026-10-01 order ok"
+    );
+    assert_eq!(
+        mask("カード 4532 1234 5678 9014"),
+        "カード ****-****-****-9014"
+    );
+}

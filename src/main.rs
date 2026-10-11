@@ -114,6 +114,12 @@ enum Command {
     Types,
     /// Check the Presidio backend.
     Presidio,
+    /// Claude Code PostToolUse hook: mask Read/Grep/Bash output (JSON on stdin).
+    Hook {
+        /// Print whether these paths are masked by the hook, and exit.
+        #[arg(long, value_name = "PATH", num_args = 1..)]
+        check: Vec<String>,
+    },
 }
 
 #[derive(Clone, Copy, ValueEnum, PartialEq)]
@@ -227,6 +233,7 @@ fn run() -> Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
+        Command::Hook { check } => cmd_hook(&settings, check),
         Command::Presidio => {
             let client = piip::presidio::PresidioClient::new(settings.presidio.clone());
             println!("url:     {}", settings.presidio.url);
@@ -247,6 +254,27 @@ fn run() -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
     }
+}
+
+fn cmd_hook(settings: &Settings, check: Vec<String>) -> Result<ExitCode> {
+    let hook = piip::hook::Hook::new(settings)?;
+    if !check.is_empty() {
+        for path in check {
+            let state = if hook.covers(&path) {
+                "masked"
+            } else {
+                "as is"
+            };
+            println!("{state:<7} {path}");
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+    let event: Value = serde_json::from_str(&read_stdin()?).context("parsing hook input")?;
+    let outcome = hook.handle(&event);
+    if let Some(output) = piip::hook::hook_output(&outcome) {
+        println!("{}", serde_json::to_string(&output)?);
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 fn read_input(path: Option<&Path>) -> Result<String> {

@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# Launcher for the piip binary inside the Claude Code plugin.
+#
+# Finds a piip binary for this plugin version, in this order:
+#   1. $PIIP_BIN
+#   2. a cached binary in the plugin data dir (or ~/.cache/piip/bin)
+#   3. a release binary downloaded from GitHub (checksum verified)
+#   4. a build from this checkout with cargo
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO="benridane/piip-skills"
+
+if [[ -n "${PIIP_BIN:-}" ]]; then
+	exec "$PIIP_BIN" "$@"
+fi
+
+VERSION="$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$ROOT/.claude-plugin/plugin.json" | head -n1)"
+DATA="${CLAUDE_PLUGIN_DATA:-${XDG_CACHE_HOME:-$HOME/.cache}/piip}"
+EXE=""
+case "$(uname -s)" in
+MINGW* | MSYS* | CYGWIN*) EXE=".exe" ;;
+esac
+BIN="$DATA/bin/piip-$VERSION$EXE"
+
+say() { echo "piip: $*" >&2; }
+
+target() {
+	local os arch
+	os="$(uname -s)"
+	arch="$(uname -m)"
+	case "$arch" in
+	x86_64 | amd64) arch="x86_64" ;;
+	arm64 | aarch64) arch="aarch64" ;;
+	*) return 1 ;;
+	esac
+	case "$os" in
+	Linux) echo "$arch-unknown-linux-musl" ;;
+	Darwin) echo "$arch-apple-darwin" ;;
+	MINGW* | MSYS* | CYGWIN*) echo "x86_64-pc-windows-msvc" ;;
+	*) return 1 ;;
+	esac
+}
+
+sha256() {
+	if command -v sha256sum >/dev/null; then
+		sha256sum "$1" | cut -d' ' -f1
+	else
+		shasum -a 256 "$1" | cut -d' ' -f1
+	fi
+}
+
+download() {
+	local t url tmp
+	t="$(target)" || return 1
+	command -v curl >/dev/null || return 1
+	url="https://github.com/$REPO/releases/download/v$VERSION/piip-v$VERSION-$t.tar.gz"
+	tmp="$(mktemp -d)"
+	trap 'rm -rf "$tmp"' RETURN
+	say "downloading $url"
+	curl -fsSL "$url" -o "$tmp/piip.tar.gz" || return 1
+	curl -fsSL "$url.sha256" -o "$tmp/piip.sha256" || return 1
+	if [[ "$(sha256 "$tmp/piip.tar.gz")" != "$(cut -d' ' -f1 "$tmp/piip.sha256")" ]]; then
+		say "checksum mismatch for $url"
+		return 1
+	fi
+	tar -xzf "$tmp/piip.tar.gz" -C "$tmp"
+	install -m 755 "$tmp/piip$EXE" "$BIN"
+}
+
+build() {
+	command -v cargo >/dev/null || return 1
+	[[ -f "$ROOT/Cargo.toml" ]] || return 1
+	say "building from source with cargo (one time)"
+	cargo build --release --quiet --manifest-path "$ROOT/Cargo.toml" --target-dir "$DATA/build" >&2 || return 1
+	install -m 755 "$DATA/build/release/piip$EXE" "$BIN"
+}
+
+if [[ ! -x "$BIN" ]]; then
+	mkdir -p "$DATA/bin"
+	if ! download && ! build; then
+		say "no binary for this platform: install Rust (https://rustup.rs) or set PIIP_BIN"
+		exit 2
+	fi
+fi
+
+exec "$BIN" "$@"

@@ -1,0 +1,12 @@
+{
+  "name": "piip",
+  "owner": { "name": "Benridane", "url": "https://github.com/benridane" },
+  "description": "Local PII and secret masking for Claude Code",
+  "plugins": [
+    {
+      "name": "piip",
+      "source": "./",
+      "description": "Mask personal data and secrets locally before Claude sees them (CLI, skill and hook)."
+    }
+  ]
+}

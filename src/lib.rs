@@ -6,6 +6,7 @@
 pub mod config;
 pub mod detector;
 pub mod engine;
+pub mod hook;
 pub mod masker;
 pub mod patterns;
 pub mod presidio;

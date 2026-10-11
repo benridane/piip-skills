@@ -615,7 +615,7 @@ fn build_rules() -> Vec<Rule> {
         rule(
             "pension",
             "id_doc",
-            &["/(", lb, r"(?:基礎年金番号|年金番号)[\t ]*[:]?[\t ]*)([0-9]{4}[-\s]?[0-9]{6})(?![0-9])/u"].concat(),
+            &["/(", lb, r"(?:基礎年金番号|年金番号)[\t ]*[:]?[\t ]*)([0-9]{4}[-\h]?[0-9]{6})(?![0-9])/u"].concat(),
             2,
             None,
             Mask(M::IdDoc),
@@ -752,18 +752,18 @@ fn build_rules() -> Vec<Rule> {
         // Email.
         rule("email", "email", r"/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/", 0, None, Mask(M::Email), Provider::None),
         // Payment cards (Luhn-validated).
-        rule("card", "card", r"/\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{1,7}\b/", 0, Some(V::IsCardNumber), Mask(M::CreditCard), Provider::None),
-        rule("card_amex_diners", "card", r"/\b\d{4}[-\s]?\d{6}[-\s]?\d{4,5}\b/", 0, Some(V::IsCardNumber), Mask(M::CreditCard), Provider::None),
+        rule("card", "card", r"/\b\d{4}[-\h]?\d{4}[-\h]?\d{4}[-\h]?\d{1,7}\b/", 0, Some(V::IsCardNumber), Mask(M::CreditCard), Provider::None),
+        rule("card_amex_diners", "card", r"/\b\d{4}[-\h]?\d{6}[-\h]?\d{4,5}\b/", 0, Some(V::IsCardNumber), Mask(M::CreditCard), Provider::None),
         // National IDs.
-        rule("ssn", "ssn", r"/\b\d{3}[-\s]\d{2}[-\s]\d{4}\b/", 0, Some(V::IsSsnNumber), Mask(M::Ssn), Provider::None),
-        rule("mynumber", "ssn", r"/\b\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/", 0, Some(V::IsMynumberNumber), Mask(M::Mynumber), Provider::None),
+        rule("ssn", "ssn", r"/\b\d{3}[-\h]\d{2}[-\h]\d{4}\b/", 0, Some(V::IsSsnNumber), Mask(M::Ssn), Provider::None),
+        rule("mynumber", "ssn", r"/\b\d{4}[-\h]?\d{4}[-\h]?\d{4}\b/", 0, Some(V::IsMynumberNumber), Mask(M::Mynumber), Provider::None),
         // Phone numbers.
-        rule("phone_jp_mobile", "phone", r"/\b0[5789]0[-\s]?\d{4}[-\s]?\d{4}\b/", 0, None, Mask(M::Phone), Provider::None),
-        rule("phone_jp_paren", "phone", r"/\b0\d{1,4}\(\d{1,4}\)\d{4}\b|\(0\d{1,4}\)\s?\d{1,4}[-\s]?\d{4}\b/", 0, None, Mask(M::Phone), Provider::None),
-        rule("phone_jp_special", "phone", r"/\b0(?:120|800|570|990)[-\s]?\d{3}[-\s]?\d{3,4}\b/", 0, None, Mask(M::Phone), Provider::None),
-        rule("phone_jp_landline", "phone", r"/\b0\d{1,4}[-\s]?\d{1,4}[-\s]?\d{4}\b/", 0, None, Mask(M::Phone), Provider::None),
-        rule("phone_international", "phone", r"/\+\d{1,3}[-\s]?\d{1,4}[-\s]?\d{1,4}[-\s]?\d{2,4}\b/", 0, None, Mask(M::Phone), Provider::None),
-        rule("phone_us_paren", "phone", r"/\(\d{3}\)\s?\d{3}[-\s]?\d{4}/", 0, None, Mask(M::Phone), Provider::None),
+        rule("phone_jp_mobile", "phone", r"/\b0[5789]0[-\h]?\d{4}[-\h]?\d{4}\b/", 0, None, Mask(M::Phone), Provider::None),
+        rule("phone_jp_paren", "phone", r"/\b0\d{1,4}\(\d{1,4}\)\d{4}\b|\(0\d{1,4}\)\s?\d{1,4}[-\h]?\d{4}\b/", 0, None, Mask(M::Phone), Provider::None),
+        rule("phone_jp_special", "phone", r"/\b0(?:120|800|570|990)[-\h]?\d{3}[-\h]?\d{3,4}\b/", 0, None, Mask(M::Phone), Provider::None),
+        rule("phone_jp_landline", "phone", r"/\b0\d{1,4}[-\h]?\d{1,4}[-\h]?\d{4}\b/", 0, None, Mask(M::Phone), Provider::None),
+        rule("phone_international", "phone", r"/\+\d{1,3}[-\h]?\d{1,4}[-\h]?\d{1,4}[-\h]?\d{2,4}\b/", 0, None, Mask(M::Phone), Provider::None),
+        rule("phone_us_paren", "phone", r"/\(\d{3}\)\s?\d{3}[-\h]?\d{4}/", 0, None, Mask(M::Phone), Provider::None),
         rule("phone_us_dashed", "phone", r"/(?<![\d.-])(?:1[-.])?\d{3}([-.])\d{3}\1\d{4}(?![\d.-])/", 0, None, Mask(M::Phone), Provider::None),
         // IP addresses.
         rule(

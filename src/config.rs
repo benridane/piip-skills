@@ -81,6 +81,8 @@ pub struct FileConfig {
     pub custom_patterns: Vec<CustomPatternConfig>,
     #[serde(default)]
     pub presidio: PresidioConfig,
+    #[serde(default)]
+    pub hook: HookConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -133,6 +135,59 @@ impl Default for PresidioConfig {
     }
 }
 
+/// Claude Code hook (`piip hook`): which tool outputs are masked before the
+/// model sees them. Files on disk are never changed.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct HookConfig {
+    pub enabled: bool,
+    /// Engine for the hook; builtin keeps every Read fast. If Presidio is
+    /// unreachable the hook falls back to builtin.
+    pub engine: String,
+    /// Globs (file name or path) of files whose contents are masked.
+    pub include: Vec<String>,
+    /// Globs that are never masked, even when included.
+    pub exclude: Vec<String>,
+    /// Mask every text file read, not only `include` (source code too).
+    pub all_files: bool,
+    /// Mask Grep content results from included files.
+    pub grep: bool,
+    /// Mask Bash output when the command names an included file.
+    pub bash: bool,
+}
+
+/// Data files that typically hold personal data. Source code is left out by
+/// default: Claude edits it, and a masked value written back would corrupt it.
+pub const DEFAULT_HOOK_INCLUDE: &[&str] = &[
+    "*.log", "*.log.*", "*.csv", "*.tsv", "*.txt", "*.json", "*.jsonl", "*.ndjson", "*.xml",
+    "*.sql", "*.dump", "*.eml", "*.mbox", "*.vcf", ".env", ".env.*", "*.env",
+];
+
+impl Default for HookConfig {
+    fn default() -> Self {
+        HookConfig {
+            enabled: true,
+            engine: "builtin".into(),
+            include: DEFAULT_HOOK_INCLUDE.iter().map(|s| s.to_string()).collect(),
+            exclude: [
+                "package.json",
+                "package-lock.json",
+                "composer.json",
+                "tsconfig*.json",
+                "*.lock",
+                "**/node_modules/**",
+                "**/.git/**",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+            all_files: false,
+            grep: true,
+            bash: true,
+        }
+    }
+}
+
 pub struct CustomPattern {
     pub label: String,
     pub re: Re,
@@ -144,6 +199,7 @@ pub struct Settings {
     pub consent_phrases: Vec<String>,
     pub custom_patterns: Vec<CustomPattern>,
     pub presidio: PresidioConfig,
+    pub hook: HookConfig,
 }
 
 impl Default for Settings {
@@ -205,6 +261,7 @@ impl Settings {
             consent_phrases,
             custom_patterns,
             presidio: file.presidio,
+            hook: file.hook,
         })
     }
 
