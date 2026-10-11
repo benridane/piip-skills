@@ -1,6 +1,6 @@
 {
   "name": "piip",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Mask personal data and secrets locally before Claude sees them: a fast Rust CLI, a skill, and a hook that masks Read/Grep/Bash output from data files. Presidio is an optional deeper engine.",
   "author": { "name": "Benridane", "url": "https://github.com/benridane" },
   "homepage": "https://github.com/benridane/piip-skills",

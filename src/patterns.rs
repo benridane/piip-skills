@@ -654,6 +654,26 @@ fn build_rules() -> Vec<Rule> {
             Mask(M::PersonName),
             Provider::None,
         ),
+        // Quoted name values under name-like keys in logs and JSON
+        // (name="山田 太郎", "customer_name": "Emily Clark"). The value must
+        // look like a person's name, so name="build" stays.
+        rule(
+            "kv_name",
+            "contact",
+            &[
+                r#"/(?<![\w.-])["']?(?:(?:full|first|last|given|family|customer|contact|display|sender|recipient|billing|shipping|holder|card_?holder|account_?holder)[_ -]?name|name|氏名|お名前|名前)["']?[\t ]*[:=][\t ]*(["'])("#,
+                "[A-Z][a-z'-]+(?:[ ][A-Z][a-z'-]+){1,3}",
+                // Three characters or more: 設定 or 管理 are not names.
+                "|(?=[^\"']{3})[", KANJI, "]{1,4}[ 　]?[", KANJI, KATAKANA, HIRAGANA, "]{1,5}",
+                "|[", KATAKANA, "]{2,8}[ 　][", KATAKANA, "]{2,8}",
+                r#")\1/u"#,
+            ]
+            .concat(),
+            2,
+            Some(V::IsPersonName),
+            Mask(M::PersonName),
+            Provider::None,
+        ),
         // Bare 名前/Name/名義 only at the start of a line: mid-sentence they
         // are too common in technical text (変数の名前: foo).
         rule(
@@ -673,8 +693,9 @@ fn build_rules() -> Vec<Rule> {
             "contact_address",
             "contact",
             &[
-                "/(", &label(address_labels), r")([^\r\n<]{4,120}?)(?=[\t ]*(?:$|[\r\n<]|(?:[,、，;|][\t ]*)?",
-                &label(&all_labels), "))/imu",
+                // A quoted value ends at its closing quote (address="..." msg=...).
+                "/(", &label(address_labels), r#")(?|"([^"\r\n<]{4,120})"|'([^'\r\n<]{4,120})'|([^\r\n<]{4,120}?)(?=[\t ]*(?:$|[\r\n<]|(?:[,、，;|][\t ]*)?"#,
+                &label(&all_labels), ")))/imu",
             ]
             .concat(),
             2,

@@ -252,3 +252,24 @@ fn eval_regressions() {
         "{slack}"
     );
 }
+
+#[test]
+fn log_key_values() {
+    let cases = [
+        (
+            r#"x name="山田 太郎" address="東京都新宿区西新宿2-8-1" msg="payment declined""#,
+            r#"x name="山* 太*" address="東京都***" msg="payment declined""#,
+        ),
+        (
+            r#"{"customer_name": "Emily Clark", "name": "build"}"#,
+            r#"{"customer_name": "E**** C****", "name": "build"}"#,
+        ),
+        (
+            r#"name="設定" job_name="nightly""#,
+            r#"name="設定" job_name="nightly""#,
+        ),
+    ];
+    for (input, expected) in cases {
+        assert_eq!(mask(input), expected, "input: {input}");
+    }
+}

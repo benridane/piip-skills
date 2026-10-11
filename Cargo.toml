@@ -1,6 +1,6 @@
 [package]
 name = "piip"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Fast local PII and secret masking CLI and Claude Code skill, with Presidio as an optional backend"
 license = "MIT"
