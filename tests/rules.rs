@@ -240,7 +240,12 @@ fn eval_regressions() {
     }
     // A Slack token keeps its digits away from the My Number rule.
     // Built at run time so the fake token does not trip secret scanners.
-    let token = ["xox", "b-674537383454-2349903409556-", &"6dZKqEuATtLr".repeat(2)].concat();
+    let token = [
+        "xox",
+        "b-674537383454-2349903409556-",
+        &"6dZKqEuATtLr".repeat(2),
+    ]
+    .concat();
     let slack = mask(&format!("key: {token}"));
     assert!(
         slack.starts_with("key: xoxb") && !slack.contains("674537"),
