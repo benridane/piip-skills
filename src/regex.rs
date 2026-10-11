@@ -36,6 +36,25 @@ impl Drop for Re {
     }
 }
 
+/// Whether patterns are JIT-compiled. Off where pcre2-sys builds without
+/// JIT (aarch64 musl) and on Apple Silicon, where JIT matching crashed;
+/// the interpreter gives the same results, only slower. PIIP_NO_JIT=1 turns
+/// it off anywhere.
+fn jit_enabled() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        if cfg!(all(target_os = "macos", target_arch = "aarch64"))
+            || std::env::var_os("PIIP_NO_JIT").is_some()
+        {
+            return false;
+        }
+        let mut jit: u32 = 0;
+        // SAFETY: PCRE2_CONFIG_JIT writes a uint32_t.
+        let rc = unsafe { pcre2_config_8(PCRE2_CONFIG_JIT, (&mut jit as *mut u32).cast()) };
+        rc >= 0 && jit == 1
+    })
+}
+
 /// Per-thread match context with a JIT stack big enough for the lazy,
 /// alternation-heavy label patterns. Shared by all patterns on the thread
 /// (a JIT stack may be reused, just not concurrently).
@@ -49,12 +68,14 @@ impl JitContext {
         // SAFETY: plain allocations from PCRE2; checked below.
         unsafe {
             let context = pcre2_match_context_create_8(ptr::null_mut());
-            let stack = pcre2_jit_stack_create_8(32 * 1024, 8 * 1024 * 1024, ptr::null_mut());
-            assert!(
-                !context.is_null() && !stack.is_null(),
-                "PCRE2 allocation failed"
-            );
-            pcre2_jit_stack_assign_8(context, None, stack.cast());
+            assert!(!context.is_null(), "PCRE2 allocation failed");
+            let mut stack = ptr::null_mut();
+            if jit_enabled() {
+                stack = pcre2_jit_stack_create_8(32 * 1024, 8 * 1024 * 1024, ptr::null_mut());
+                if !stack.is_null() {
+                    pcre2_jit_stack_assign_8(context, None, stack.cast());
+                }
+            }
             JitContext { context, stack }
         }
     }
@@ -65,7 +86,9 @@ impl Drop for JitContext {
         // SAFETY: both pointers were created in new() and are freed once.
         unsafe {
             pcre2_match_context_free_8(self.context);
-            pcre2_jit_stack_free_8(self.stack);
+            if !self.stack.is_null() {
+                pcre2_jit_stack_free_8(self.stack);
+            }
         }
     }
 }
@@ -152,8 +175,10 @@ impl Re {
             ));
         }
         // JIT is an optimization: the interpreter is used if it fails.
-        // SAFETY: `code` is a valid compiled pattern.
-        unsafe { pcre2_jit_compile_8(code, PCRE2_JIT_COMPLETE) };
+        if jit_enabled() {
+            // SAFETY: `code` is a valid compiled pattern.
+            unsafe { pcre2_jit_compile_8(code, PCRE2_JIT_COMPLETE) };
+        }
         Ok(Re { code })
     }
 
@@ -173,17 +198,24 @@ impl Re {
     ) -> Result<Option<Groups>, c_int> {
         // SAFETY: subject is valid UTF-8 and `start` is a char boundary, which
         // is what PCRE2_NO_UTF_CHECK requires; match data fits the pattern.
-        let rc = JIT_CONTEXT.with(|jit| unsafe {
-            pcre2_match_8(
-                self.code,
-                subject.as_ptr(),
-                subject.len(),
-                start,
-                PCRE2_NO_UTF_CHECK,
-                state.data,
-                jit.context,
-            )
-        });
+        let run = |options: u32| {
+            JIT_CONTEXT.with(|jit| unsafe {
+                pcre2_match_8(
+                    self.code,
+                    subject.as_ptr(),
+                    subject.len(),
+                    start,
+                    PCRE2_NO_UTF_CHECK | options,
+                    state.data,
+                    jit.context,
+                )
+            })
+        };
+        let mut rc = run(0);
+        // Out of JIT stack: the interpreter uses the heap instead.
+        if rc == PCRE2_ERROR_JIT_STACKLIMIT {
+            rc = run(PCRE2_NO_JIT);
+        }
         if rc == PCRE2_ERROR_NOMATCH {
             return Ok(None);
         }
