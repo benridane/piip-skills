@@ -276,7 +276,9 @@ static ACCOUNT_PLACEHOLDER: LazyLock<Re> = LazyLock::new(|| {
     re(r"/^(?:未定|なし|無し|不明|未登録|忘れました|わかりません|none|n\/a|unknown|\*+|x+)$/iu")
 });
 static SECRET_PLACEHOLDER: LazyLock<Re> = LazyLock::new(|| {
-    re(r"/^(?:\$|%|\{|getenv|env\(|process\.env|null$|true$|false$|\*+$|x{3,}$|\[REDACTED\]$)/i")
+    re(
+        r"/^(?:\$\{?[A-Za-z_]\w*\}?$|\$\{|%[A-Za-z_]\w*%$|\{\{|\{%|getenv|env\(|process\.env|null$|true$|false$|\*+$|x{3,}$|\[REDACTED\]$)/i",
+    )
 });
 static PHONE_EXTENSION: LazyLock<Re> =
     LazyLock::new(|| re(r"/[\t ]*[(]?(?:内線|ext\.?|x)[\t ]*[0-9]{1,6}[)]?$/iu"));
@@ -316,6 +318,7 @@ pub fn validate(v: Validate, value: &str) -> bool {
                 && &d[5..9] != "0000"
         }
         Validate::IsMynumberNumber => is_mynumber_checkdigit(&digits(value)),
+        Validate::IsJpLandline => digits(value).len() == 10,
         Validate::IsMaskableIpv6 => is_maskable_ipv6(value),
         Validate::IsAiKey => is_ai_key(value),
     }

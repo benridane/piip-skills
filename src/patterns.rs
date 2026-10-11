@@ -30,7 +30,10 @@ pub const KATAKANA: &str = r"\x{30A1}-\x{30FA}\x{30FC}\x{31F0}-\x{31FF}";
 pub const HIRAGANA: &str = r"\x{3041}-\x{3096}";
 
 /// Separator between a label and its value: colon, closing bracket, or tab.
-const LABEL_SEPARATOR: &str = r"(?:[】\]][\t ]*[:=]?|[\t ]*[:=]|\t)[\t ]*";
+// A Japanese label may also be followed by spaces alone (お名前　山田 太郎),
+// unless hiragana follows (お名前 を入力してください).
+const LABEL_SEPARATOR: &str =
+    r"(?:[】\]][\t ]*[:=]?|[\t ]*[:=]|\t|(?<![\x00-\x7F])[ ]+(?![\s\p{Hiragana}]))[\t ]*";
 
 // Patterns shared with the detector.
 
@@ -153,6 +156,8 @@ pub enum Validate {
     IsCardNumber,
     IsSsnNumber,
     IsMynumberNumber,
+    /// Japanese landline numbers have exactly 10 digits.
+    IsJpLandline,
     IsMaskableIpv6,
     IsAiKey,
 }
@@ -740,7 +745,22 @@ fn build_rules() -> Vec<Rule> {
             "address",
             &[
                 "/(?<![一-龠々])((?:", DESIGNATED_CITIES, ")(?:[一-龠々ぁ-んァ-ヶー]{1,5}区)?|(?:", TOKYO_WARDS,
-                "))((?:[一-龠々ァ-ヶ][一-龠々ぁ-んァ-ヶー0-9]{0,19}?)", ADDRESS_TAIL, ")/u",
+                "))((?!内|外|民|役所|場|長|議|立|営|販|街地)(?:[一-龠々ァ-ヶ][一-龠々ぁ-んァ-ヶー0-9]{0,19}?)", ADDRESS_TAIL, ")/u",
+            ]
+            .concat(),
+            2,
+            None,
+            Replace("***"),
+            Provider::None,
+        ),
+        // Other cities, and towns in a county, without the prefecture
+        // (川越市脇田町662-9). Not 市内/市役所/市場...: those are not addresses.
+        rule(
+            "jp_town_address",
+            "address",
+            &[
+                "/(?<![一-龠々])([一-龠々]{1,4}市(?:[一-龠々]{1,4}区)?|[一-龠々]{1,4}郡[一-龠々]{1,4}[町村])",
+                "((?!内|外|民|役所|場|長|議|立|営|販|街地)(?:[一-龠々ァ-ヶ][一-龠々ぁ-んァ-ヶー]{0,9}?)", ADDRESS_TAIL, ")/u",
             ]
             .concat(),
             2,
@@ -761,7 +781,7 @@ fn build_rules() -> Vec<Rule> {
         rule("phone_jp_mobile", "phone", r"/\b0[5789]0[-\h]?\d{4}[-\h]?\d{4}\b/", 0, None, Mask(M::Phone), Provider::None),
         rule("phone_jp_paren", "phone", r"/\b0\d{1,4}\(\d{1,4}\)\d{4}\b|\(0\d{1,4}\)\s?\d{1,4}[-\h]?\d{4}\b/", 0, None, Mask(M::Phone), Provider::None),
         rule("phone_jp_special", "phone", r"/\b0(?:120|800|570|990)[-\h]?\d{3}[-\h]?\d{3,4}\b/", 0, None, Mask(M::Phone), Provider::None),
-        rule("phone_jp_landline", "phone", r"/\b0\d{1,4}[-\h]?\d{1,4}[-\h]?\d{4}\b/", 0, None, Mask(M::Phone), Provider::None),
+        rule("phone_jp_landline", "phone", r"/\b(?:0\d{1,4}[-\h]\d{1,4}[-\h]?\d{4}|0\d{1,4}[-\h]?\d{1,4}[-\h]\d{4}|0\d{9})\b/", 0, Some(V::IsJpLandline), Mask(M::Phone), Provider::None),
         rule("phone_international", "phone", r"/\+\d{1,3}[-\h]?\d{1,4}[-\h]?\d{1,4}[-\h]?\d{2,4}\b/", 0, None, Mask(M::Phone), Provider::None),
         rule("phone_us_paren", "phone", r"/\(\d{3}\)\s?\d{3}[-\h]?\d{4}/", 0, None, Mask(M::Phone), Provider::None),
         rule("phone_us_dashed", "phone", r"/(?<![\d.-])(?:1[-.])?\d{3}([-.])\d{3}\1\d{4}(?![\d.-])/", 0, None, Mask(M::Phone), Provider::None),
@@ -787,10 +807,6 @@ fn build_rules() -> Vec<Rule> {
         ("conoha_account", r"/\bgnc[a-z0-9]{8,12}\b/i"),
         ("lolipop_domain", r"/\b[\w-]+\.lolipop\.jp\b/i"),
         ("mixhost_domain", r"/\b[\w-]+\.mixh\.jp\b/i"),
-        (
-            "azure_guid",
-            r"/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i",
-        ),
     ];
     for (id, regex) in hosting {
         rules.push(rule(
@@ -803,6 +819,17 @@ fn build_rules() -> Vec<Rule> {
             Hosting,
         ));
     }
+    // A GUID is an Azure ID only in Azure context: request and trace IDs in
+    // logs are GUIDs too, and masking them gets in the way of debugging.
+    rules.push(rule(
+        "hosting_azure_guid",
+        "hosting",
+        r#"/(?:(?:subscription|tenant|client|app(?:lication)?|object|directory|principal)[\t _-]*id|azure[\w\t -]{0,20}?|サブスクリプション\s*ID|テナント\s*ID|クライアント\s*ID|\/subscriptions\/)[\t ]*[:=]?[\t ]*["']?\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/iu"#,
+        1,
+        None,
+        Mask(M::HostingId),
+        Hosting,
+    ));
 
     // Developer secrets with fixed prefixes. Run before the generic AI key
     // patterns so those cannot pre-chew their substrings.
@@ -848,6 +875,26 @@ fn build_rules() -> Vec<Rule> {
             Ai,
         ));
     }
+
+    // Prefixed secrets go before the number rules (cards, My Number, phones)
+    // so those cannot take digits out of a token (xoxb-674537383454-...).
+    let prefixed = |r: &Rule| {
+        r.id.starts_with("secret_")
+            || matches!(
+                r.id.as_str(),
+                "ai_openai_project"
+                    | "ai_openai_legacy"
+                    | "ai_openai_48"
+                    | "ai_anthropic"
+                    | "ai_google_ai"
+                    | "ai_huggingface"
+                    | "ai_replicate"
+            )
+    };
+    let (early, rest): (Vec<Rule>, Vec<Rule>) = rules.into_iter().partition(prefixed);
+    rules = rest;
+    let at = rules.iter().position(|r| r.id == "dob").expect("dob rule");
+    rules.splice(at..at, early);
 
     // Name self-introductions (opt-in type name_text).
     for (id, regex) in NAME_PATTERNS {

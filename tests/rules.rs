@@ -206,3 +206,44 @@ fn numbers_do_not_span_lines() {
         "カード ****-****-****-9014"
     );
 }
+
+#[test]
+fn eval_regressions() {
+    let cases = [
+        // Full-width space after a Japanese label.
+        ("お名前　山田 太郎", "お名前　山* 太*"),
+        ("お名前 を入力してください", "お名前 を入力してください"),
+        // Landlines have 10 digits; 12 digits is some other number.
+        (
+            "お問い合わせ番号 0123-4567-8901",
+            "お問い合わせ番号 0123-4567-8901",
+        ),
+        ("Invoice INV-01234567", "Invoice INV-01234567"),
+        // Cities without the prefecture, but not 市内.
+        ("川越市脇田町662-9", "川越市***"),
+        ("大阪市内2-3日で届きます", "大阪市内2-3日で届きます"),
+        // GUIDs only in Azure context.
+        (
+            "request_id 1b4e28ba-2fa1-41d2-883f-0016d3cca427",
+            "request_id 1b4e28ba-2fa1-41d2-883f-0016d3cca427",
+        ),
+        (
+            "AZURE_TENANT_ID=1b4e28ba-2fa1-41d2-883f-0016d3cca427",
+            "AZURE_TENANT_ID=****-****-****-****-0016d3cca427",
+        ),
+        // Real passwords may start with %; %VAR% is a placeholder.
+        ("DB_PASSWORD=%tH0keH%%uY8Gn", "DB_PASSWORD=[REDACTED]"),
+        ("DB_PASSWORD=%DB_PASS%", "DB_PASSWORD=%DB_PASS%"),
+    ];
+    for (input, expected) in cases {
+        assert_eq!(mask(input), expected, "input: {input}");
+    }
+    // A Slack token keeps its digits away from the My Number rule.
+    // Built at run time so the fake token does not trip secret scanners.
+    let token = ["xox", "b-674537383454-2349903409556-", &"6dZKqEuATtLr".repeat(2)].concat();
+    let slack = mask(&format!("key: {token}"));
+    assert!(
+        slack.starts_with("key: xoxb") && !slack.contains("674537"),
+        "{slack}"
+    );
+}
