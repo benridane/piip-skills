@@ -5,7 +5,7 @@
 
 - **ローカル完結**: 外部 API を呼ばない。Presidio もローカルの `127.0.0.1` で動く
 - **日本語に強いルール**: 住所・電話・マイナンバー・問い合わせ形式の項目・全角文字に対応。検証（Luhn、マイナンバー検査数字など）で誤検出を抑える。正規表現は PCRE2（JIT）
-- **速い**: 1MB の問い合わせ文を約 0.25 秒でマスク、64MB・300 ファイルのディレクトリを約 1.2 秒でスキャン（並列）
+- **速い**: 1MB の問い合わせ文を約 0.25 秒でマスク（x86_64）、64MB・300 ファイルのディレクトリを約 1.2 秒でスキャン（並列）
 - **自動で守るフック**: ログ・CSV・JSON・`.env` などを Claude が Read/Grep/Bash で読むと、出力をマスクしてからモデルに渡す（ファイル自体は変えない）
 - **エンジン選択**: `builtin`（既定）/ `hybrid`（builtin ルール → Presidio NER）/ `presidio`
 
@@ -34,8 +34,16 @@ logs/2026-10-01.log:120:41: email [email] -> t***@example.jp
 /plugin install piip@piip
 ```
 
-スキル・フック・`piip` コマンドがまとめて入る。実行ファイルは初回に GitHub Releases から取得する
-（チェックサム検証あり。取得できない環境では cargo でビルドする）。
+スキル・フック・`piip` コマンドがまとめて入る。実行ファイルは初回に [GitHub Releases](https://github.com/benridane/piip-skills/releases)
+から取得する（SHA-256 を検証。取得できない環境では cargo でビルドする）。
+
+| 環境 | 配布物 | 備考 |
+|---|---|---|
+| Linux x86_64 / arm64 | 静的リンク（musl） | arm64 は PCRE2 の JIT なし（約 4 倍遅いが結果は同じ） |
+| macOS arm64 / x86_64 | | arm64 は JIT なし |
+| Windows x86_64 | `piip.exe` | フックの起動スクリプトは bash 前提（Git Bash）。未検証 |
+
+実行ファイルだけ欲しい場合は Releases から直接取得できる。
 
 ### ソースから
 
